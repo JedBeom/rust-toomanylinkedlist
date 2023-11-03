@@ -2,36 +2,37 @@
  * that point to each other
  */
 
-pub struct List {
-    head: Link,
+pub struct List<T> {
+    head: Link<T>,
 }
 
 // type alias
-type Link = Option<Box<Node>>;
+type Link<T> = Option<Box<Node<T>>>;
 
-struct Node {
-    elem: i32,
-    next: Link,
+struct Node<T> {
+    elem: T,
+    next: Link<T>,
 }
 
-impl List {
+// 제네릭을 위해서라면 impl 뒤에도 <T>가 붙어야 한다
+impl<T> List<T> {
     pub fn new() -> Self {
         List { head: None }
     }
     
     // push a new element at the front of the list
-    pub fn push(&mut self, elem: i32) {
+    pub fn push(&mut self, elem: T) {
         let new_node = Box::new(Node {
             elem,
             next: self.head.take(),
-            // mem::replace: Moves src into the referenced dest, returning the previous dest value.
         });
 
         self.head = Some(new_node);
     }
 
     // pop the front-most element
-    pub fn pop(&mut self) -> Option<i32> {
+    pub fn pop(&mut self) -> Option<T> {
+        // map은 Some(X)를 Some(Y)로, None은 None으로 반환
         self.head.take().map( |node| {
             self.head = node.next;
             node.elem
@@ -39,7 +40,8 @@ impl List {
     }
 }
 
-impl Drop for List {
+// 제네릭을 위해서라면 impl 뒤에도 <T>가 붙어야 한다
+impl<T> Drop for List<T> {
     fn drop(&mut self) {
         // Stack overflow를 막기 위해 재귀 대신 while loop 사용
         let mut cur_link = self.head.take();
