@@ -60,6 +60,23 @@ impl<'a, T> Iterator for Iter<'a, T> {
     }
 }
 
+// Drop
+impl<T> Drop for List<T> {
+    fn drop(&mut self) {
+        let mut head = self.head.take();
+        while let Some(node) = head {
+            // try_unwrap:
+            // Rc가 정확히 한 번만 참조되고 있다면 내부 값을 반환.
+            // 아니면 Err 반환
+            if let Ok(mut node) = Rc::try_unwrap(node) {
+                head = node.next.take();
+            } else {
+                break;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::List;
