@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 
 pub struct List<T> {
     head: Link<T>,
@@ -65,6 +65,15 @@ impl<T> List<T> {
              */
         })
     }
+
+    pub fn peek_front(&self) -> Option<Ref<T>> { 
+        // Ref는 일단 갖고 나가야 함...
+        // Ref를 벗겨서 나갈 수가 없다
+        self.head.as_ref().map(|node| {
+            Ref::map(node.borrow(), |node| &node.elem)
+            // Ref::map: Make a new Ref for a component of the borrowed data
+        })
+    }
 }
 
 impl<T> Drop for List<T> {
@@ -99,5 +108,20 @@ mod test {
 
         assert_eq!(list.pop_front(), Some(1));
         assert_eq!(list.pop_front(), None);
+    }
+
+    #[test]
+    fn peek() {
+        let mut list = List::new();
+        assert!(list.peek_front().is_none());
+
+        list.push_front(1);
+        list.push_front(2);
+        list.push_front(3);
+
+        assert_eq!(*list.peek_front().unwrap(), 3);
+        // list.peek_front(): Option<Ref<T>>
+        // list.peek_front().unwrap(): Ref<T>
+        // *list.peek_front().unwrap(): T
     }
 } 
