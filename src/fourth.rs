@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use std::cell::{Ref, RefCell};
+use std::cell::{Ref, RefCell, RefMut};
 
 pub struct List<T> {
     head: Link<T>,
@@ -58,7 +58,7 @@ impl<T> List<T> {
             Rc::try_unwrap(old_head).ok().unwrap().into_inner().elem
             /*
              * try_unwrap: 앞에서 썼듯이, reference count가 정확히 1이면 unwrap
-             *      제대로 짰으면 unwrap이 성공해야함
+             *      fourth List를 제대로 짰으면 unwrap이 성공해야함
              * ok: Result -> Option 변환 (consume)
              * unwrap: Option이 Some이라는 가정 하에 unwrap (consume)
              * into_inner: RefCell을 벗겨내기 (consume)
@@ -68,10 +68,63 @@ impl<T> List<T> {
 
     pub fn peek_front(&self) -> Option<Ref<T>> { 
         // Ref는 일단 갖고 나가야 함...
-        // Ref를 벗겨서 나갈 수가 없다
+        // Ref를 벗기면 이 메서드 scope가 끝나면서 temporary value가 drop됨
         self.head.as_ref().map(|node| {
             Ref::map(node.borrow(), |node| &node.elem)
             // Ref::map: Make a new Ref for a component of the borrowed data
+        })
+    }
+
+    // 이하는 위 메서드들을 복붙한다음 front -> back 등으로 단어 교체한 것들
+    
+    pub fn push_back(&mut self, elem: T) {
+        let new_tail = Node::new(elem);
+        match self.tail.take() { 
+            Some(old_tail) => {
+                old_tail.borrow_mut().next = Some(new_tail.clone());
+                new_tail.borrow_mut().prev = Some(old_tail);
+                self.tail = Some(new_tail);
+            }
+            None => { 
+                self.tail = Some(new_tail.clone()); 
+                self.head = Some(new_tail); 
+            }
+        }
+    }
+
+    pub fn pop_back(&mut self) -> Option<T> {
+        self.tail.take().map(|old_tail| {
+            match old_tail.borrow_mut().prev.take() {
+                Some(new_tail) => { // not empty list
+                    new_tail.borrow_mut().next.take();
+                    self.tail = Some(new_tail);
+                }
+                None => { // empty list
+                      self.head.take();
+                }
+            }
+            Rc::try_unwrap(old_tail).ok().unwrap().into_inner().elem
+        })
+    }
+
+    pub fn peek_back(&self) -> Option<Ref<T>> { 
+        self.tail.as_ref().map(|node| {
+            Ref::map(node.borrow(), |node| &node.elem)
+        })
+    }
+
+    // peek mut ver.
+    // Ref -> RefMut로 바뀜
+
+    pub fn peek_front_mut(&self) -> Option<RefMut<T>> { 
+        self.head.as_ref().map(|node| {
+            RefMut::map(node.borrow_mut(), |node| &mut node.elem)
+        })
+    }
+
+    pub fn peek_back_mut(&self) -> Option<RefMut<T>> { 
+        self.tail.as_ref().map(|node| {
+            RefMut::map(node.borrow_mut(), |node| &mut node.elem)
         })
     }
 }
@@ -91,6 +144,7 @@ mod test {
     fn basics() {
         let mut list = List::new();
 
+        // ---- front ----
         assert_eq!(list.pop_front(), None);
 
         list.push_front(1);
@@ -108,12 +162,34 @@ mod test {
 
         assert_eq!(list.pop_front(), Some(1));
         assert_eq!(list.pop_front(), None);
+
+        // ---- back ----
+        assert_eq!(list.pop_back(), None);
+
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+
+        assert_eq!(list.pop_back(), Some(3));
+        assert_eq!(list.pop_back(), Some(2));
+
+        list.push_back(4);
+        list.push_back(5);
+
+        assert_eq!(list.pop_back(), Some(5));
+        assert_eq!(list.pop_back(), Some(4));
+
+        assert_eq!(list.pop_back(), Some(1));
+        assert_eq!(list.pop_back(), None);
     }
 
     #[test]
     fn peek() {
         let mut list = List::new();
         assert!(list.peek_front().is_none());
+        assert!(list.peek_back().is_none());
+        assert!(list.peek_front_mut().is_none());
+        assert!(list.peek_back_mut().is_none());
 
         list.push_front(1);
         list.push_front(2);
@@ -123,5 +199,16 @@ mod test {
         // list.peek_front(): Option<Ref<T>>
         // list.peek_front().unwrap(): Ref<T>
         // *list.peek_front().unwrap(): T
+        
+        {
+            let mut a = list.peek_front_mut().unwrap();
+            *a = 4;
+        }
+
+        assert_eq!(*list.peek_front().unwrap(), 4);
+
+        assert_eq!(&mut *list.peek_front_mut().unwrap(), &mut 4);
+        assert_eq!(&*list.peek_back().unwrap(), &1);
+        assert_eq!(&mut *list.peek_back_mut().unwrap(), &mut 1);
     }
 } 
